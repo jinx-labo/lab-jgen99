@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>jgen99 – MINUTEUR</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0d0d0d;
+    color: #f0f0f0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    overflow: hidden;
+  }
+
+  h1 {
+    font-size: clamp(1.8rem, 7vw, 3rem);
+    letter-spacing: 0.35em;
+    font-weight: 900;
+    color: #ff6a00;
+    text-shadow: 0 0 24px #ff6a0088;
+    margin-bottom: 48px;
+    user-select: none;
+  }
+
+  .display-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 48px;
+  }
+
+  #display {
+    font-size: clamp(5rem, 22vw, 10rem);
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.05em;
+    color: #ffffff;
+    text-shadow: 0 0 40px #ffffff44;
+    line-height: 1;
+    transition: color 0.3s;
+    user-select: none;
+  }
+
+  #display.running {
+    color: #80ff80;
+    text-shadow: 0 0 40px #80ff8066;
+  }
+
+  #display.urgent {
+    color: #ff4444;
+    text-shadow: 0 0 40px #ff444488;
+    animation: pulse 0.5s infinite alternate;
+  }
+
+  @keyframes pulse {
+    from { opacity: 1; }
+    to   { opacity: 0.5; }
+  }
+
+  .controls-row {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    margin-bottom: 40px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .btn {
+    border: none;
+    border-radius: 16px;
+    cursor: pointer;
+    font-weight: 800;
+    transition: transform 0.1s, box-shadow 0.1s, background 0.2s;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .btn:active {
+    transform: scale(0.93);
+  }
+
+  .btn-minute {
+    width: clamp(80px, 20vw, 110px);
+    height: clamp(80px, 20vw, 110px);
+    font-size: clamp(1.6rem, 5vw, 2.4rem);
+    background: #1e1e1e;
+    color: #ff6a00;
+    border: 2px solid #ff6a0066;
+    box-shadow: 0 4px 20px #00000088;
+  }
+
+  .btn-minute:hover {
+    background: #2a2a2a;
+    box-shadow: 0 4px 28px #ff6a0033;
+  }
+
+  .btn-start {
+    width: clamp(120px, 32vw, 170px);
+    height: clamp(80px, 20vw, 110px);
+    font-size: clamp(1.1rem, 3.5vw, 1.5rem);
+    background: #ff6a00;
+    color: #fff;
+    letter-spacing: 0.1em;
+    box-shadow: 0 4px 28px #ff6a0055;
+  }
+
+  .btn-start:hover {
+    background: #ff8533;
+    box-shadow: 0 4px 36px #ff6a0099;
+  }
+
+  .btn-start.running-mode {
+    background: #cc2200;
+    box-shadow: 0 4px 28px #cc220055;
+  }
+
+  .btn-start.running-mode:hover {
+    background: #ee3311;
+  }
+
+  .btn-reset {
+    width: clamp(80px, 20vw, 110px);
+    height: clamp(50px, 13vw, 68px);
+    font-size: clamp(0.85rem, 2.5vw, 1.1rem);
+    background: #1e1e1e;
+    color: #888;
+    border: 2px solid #333;
+    letter-spacing: 0.08em;
+    box-shadow: 0 2px 12px #00000066;
+  }
+
+  .btn-reset:hover {
+    background: #2a2a2a;
+    color: #aaa;
+  }
+
+  .bottom-row {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  #done-msg {
+    display: none;
+    font-size: clamp(1.2rem, 4vw, 1.8rem);
+    font-weight: 800;
+    color: #ff4444;
+    letter-spacing: 0.15em;
+    text-shadow: 0 0 20px #ff444488;
+    animation: blink 0.7s infinite alternate;
+    margin-top: 28px;
+  }
+
+  @keyframes blink {
+    from { opacity: 1; }
+    to   { opacity: 0.2; }
+  }
+
+  /* ring progress */
+  .ring-wrap {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+
+  #ring {
+    transform: rotate(-90deg);
+    transform-origin: center;
+  }
+
+  #ring-bg {
+    fill: none;
+    stroke: #222;
+    stroke-width: 6;
+  }
+
+  #ring-fg {
+    fill: none;
+    stroke: #ff6a00;
+    stroke-width: 6;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s linear, stroke 0.3s;
+  }
+</style>
+</head>
+<body>
+
+<h1>MINUTEUR</h1>
+
+<div class="display-wrap">
+  <svg class="ring-wrap" id="ring-svg" width="320" height="320" viewBox="0 0 320 320">
+    <circle id="ring-bg" cx="160" cy="160" r="148"/>
+    <circle id="ring-fg" cx="160" cy="160" r="148"/>
+  </svg>
+  <div id="display">05:00</div>
+</div>
+
+<div class="controls-row">
+  <button class="btn btn-minute" id="btnMinus" aria-label="Moins 1 minute">−1'</button>
+  <button class="btn btn-start" id="btnStart">▶ START</button>
+  <button class="btn btn-minute" id="btnPlus"  aria-label="Plus 1 minute">+1'</button>
+</div>
+
+<div class="bottom-row">
+  <button class="btn btn-reset" id="btnReset">⟳ RESET</button>
+</div>
+
+<div id="done-msg">⏰ C'EST PRÊT !</div>
+
+<script>
+(function(){
+  const MIN = 60;
+  const MAX = 99 * 60;
+  const DEFAULT = 5 * 60;
+
+  let total   = DEFAULT;
+  let remain  = DEFAULT;
+  let running = false;
+  let timer   = null;
+  let beeping = false;
+
+  const display  = document.getElementById('display');
+  const btnStart = document.getElementById('btnStart');
+  const btnMinus = document.getElementById('btnMinus');
+  const btnPlus  = document.getElementById('btnPlus');
+  const btnReset = document.getElementById('btnReset');
+  const doneMsg  = document.getElementById('done-msg');
+  const ringFg   = document.getElementById('ring-fg');
+
+  const CIRC = 2 * Math.PI * 148;
+  ringFg.style.strokeDasharray  = CIRC;
+  ringFg.style.strokeDashoffset = 0;
+
+  let audioCtx = null;
+  function getAudio(){
+    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    return audioCtx;
+  }
+
+  function beep(freq, dur, vol){
+    try {
+      const ctx = getAudio();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      gain.gain.setValueAtTime(vol || 0.6, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + dur);
+    } catch(e){}
+  }
+
+  function beepAlarm(){
+    beep(880, 0.18, 0.7);
+    setTimeout(()=>beep(880,0.18,0.7), 220);
+    setTimeout(()=>beep(1100,0.28,0.8), 440);
+  }
+
+  function fmt(s){
+    const m = Math.floor(s/60);
+    const sec = s % 60;
+    return (m < 10 ? '0'+m : m) + ':' + (sec < 10 ? '0'+sec : sec);
+  }
+
+  function updateDisplay(){
+    display.textContent = fmt(remain);
+    // ring
+    const ratio = total > 0 ? remain / total : 1;
+    const offset = CIRC * (1 - ratio);
+    ringFg.style.strokeDashoffset = offset;
+    // color states
+    display.classList.remove('running','urgent');
+    ringFg.style.stroke = '#ff6a00';
+    if(running){
+      if(remain <= 10){
+        display.classList.add('urgent');
+        ringFg.style.stroke = '#ff4444';
+      } else {
+        display.classList.add('running');
+        ringFg.style.stroke = '#80ff80';
+      }
+    }
+  }
+
+  function startTimer(){
+    if(remain <= 0) return;
+    running = true;
+    btnStart.textContent = '⏸ PAUSE';
+    btnStart.classList.add('running-mode');
+    doneMsg.style.display = 'none';
+    beeping = false;
+    tick();
+  }
+
+  function tick(){
+    if(!running) return;
+    timer = setTimeout(()=>{
+      if(remain > 0){
+        remain--;
+        updateDisplay();
+        if(remain === 0){
+          finish();
+        } else {
+          tick();
+        }
+      }
+    }, 1000);
+  }
+
+  function finish(){
+    running = false;
+    clearTimeout(timer);
+    btnStart.textContent = '▶ START';
+    btnStart.classList.remove('running-mode');
+    display.classList.add('urgent');
+    doneMsg.style.display = 'block';
+    ringFg.style.strokeDashoffset = CIRC;
+    ringFg.style.stroke = '#ff4444';
+    // alarm sequence
+    let count = 0;
+    function alarm(){
+      if(count >= 5) return;
+      beepAlarm();
+      count++;
+      setTimeout(alarm, 900);
+    }
+    alarm();
+  }
+
+  function pauseTimer(){
+    running = false;
+    clearTimeout(timer);
+    btnStart.textContent = '▶ START';
+    btnStart.classList.remove('running-mode');
+    display.classList.remove('running','urgent');
+  }
+
+  function reset(){
+    pauseTimer();
+    remain = total;
+    doneMsg.style.display = 'none';
+    updateDisplay();
+  }
+
+  btnStart.addEventListener('click', ()=>{
+    if(running){
+      pauseTimer();
+    } else {
+      if(remain <= 0) remain = total;
+      startTimer();
+    }
+  });
+
+  btnMinus.addEventListener('click', ()=>{
+    if(running) return;
+    total  = Math.max(MIN, total - 60);
+    remain = total;
+    doneMsg.style.display = 'none';
+    updateDisplay();
+    beep(440, 0.1, 0.3);
+  });
+
+  btnPlus.addEventListener('click', ()=>{
+    if(running) return;
+    total  = Math.min(MAX, total + 60);
+    remain = total;
+    doneMsg.style.display = 'none';
+    updateDisplay();
+    beep(660, 0.1, 0.3);
+  });
+
+  btnReset.addEventListener('click', ()=>{
+    reset();
+    beep(330, 0.12, 0.3);
+  });
+
+  // init
+  updateDisplay();
+})();
+</script>
+</body>
+</html>
